@@ -24,21 +24,27 @@ def _screenshot_hash(png: bytes) -> str:
 
 
 def _is_blank_done(action: DoneAction) -> bool:
-    fields = (
+    v1_fields = (
         action.repository,
         action.latest_release,
         action.version,
         action.tag,
         action.author,
     )
-    return not any(f.strip() for f in fields)
+    if not any(f.strip() for f in v1_fields):
+        return True
+    if not action.published_at.strip():
+        return True
+    if not action.release_notes.strip():
+        return True
+    return False
 
 
 def run_agent_loop(
     browser: Browser,
     vision: VisionClient,
     user_prompt: str,
-    max_steps: int = 25,
+    max_steps: int = 30,
     time_budget_s: float = 180.0,
     debug_dir: Path | None = None,
     debug_vision: bool = False,
@@ -102,7 +108,9 @@ def run_agent_loop(
 
         if action.action == "done":
             if _is_blank_done(action):
-                raise AgentLoopError("Model returned done with all fields empty")
+                raise AgentLoopError(
+                    "Model returned done with incomplete extraction (blank v1 or v2 fields)"
+                )
             return action
 
         if action.action == "click":

@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from google.genai import errors as genai_errors
@@ -54,8 +55,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-steps",
         type=int,
-        default=25,
-        help="Maximum agent loop iterations (default: 25)",
+        default=30,
+        help="Maximum agent loop iterations (default: 30)",
     )
     visibility = parser.add_mutually_exclusive_group()
     visibility.add_argument("--headless", action="store_true", help="Run browser headless")
@@ -81,17 +82,20 @@ def _resolve_model(provider: str, cli_model: str | None) -> str:
     return DEFAULT_GEMINI_MODEL
 
 
-def _done_payload(done: DoneAction) -> dict[str, str]:
+def _done_payload(done: DoneAction) -> dict[str, Any]:
     return {
         "repository": done.repository,
         "latest_release": done.latest_release,
         "version": done.version,
         "tag": done.tag,
         "author": done.author,
+        "published_at": done.published_at,
+        "release_notes": done.release_notes,
+        "downloads": [{"name": asset.name, "url": asset.url} for asset in done.downloads],
     }
 
 
-def _emit_result(payload: dict[str, str], output_path: str | None) -> None:
+def _emit_result(payload: dict[str, Any], output_path: str | None) -> None:
     text = json.dumps(payload, indent=2)
     print(text)
     if output_path:
