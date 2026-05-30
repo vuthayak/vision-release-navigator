@@ -16,6 +16,67 @@ Reverse-chronological log of meaningful changes, learnings, and decisions. New e
 
 ---
 
+## 2026-05-30 — Phase 09: rich extraction prompt
+
+**Phase**: 09
+**Trigger**: v2 requires vision model to gather publish date, release notes, and download assets before emitting `done`.
+**Change**:
+- Rewrote GitHub heuristics in `SYSTEM_PROMPT` with per-field mapping for `published_at`, `release_notes`, and `downloads`.
+- Added scroll-within-release strategy, anti-hallucination clause for URLs, eight-field stop condition, and abbreviated example `done` JSON.
+- Documented recommendation to raise `max_steps` from 25 to 30 in phase 10.
+
+**Result**: Prompt mentions all eight output fields and ties v2 fields to visual regions; no selectors added.
+
+**Follow-ups**: Phase 10 (`_is_blank_done`, CLI stdout, optional `max_steps` bump).
+
+---
+
+## 2026-05-30 — Phase 10: loop & CLI v2 wiring
+
+**Phase**: 10
+**Trigger**: Phase 08 schema landed; loop and CLI still emitted v1 five-field JSON and blank-done guard.
+**Change**:
+- Extended `_is_blank_done()` to require non-empty `published_at` and `release_notes`; empty `downloads` allowed.
+- `_done_payload()` and stdout/`--output` now serialize all eight v2 fields including nested downloads.
+- Default `max_steps` raised 25 → 30; exported `DownloadAsset` from `agent/vision.py`.
+
+**Result**: Incomplete v2 extractions raise `AgentLoopError` → exit 1 (same as v1 blank done).
+
+**Follow-ups**: Phase 09 (prompt heuristics for scroll/assets), phase 11 (E2E smoke, README).
+
+---
+
+## 2026-05-30 — Phase 08: extended `done` schema
+
+**Phase**: 08
+**Trigger**: v2 implementation — schema must precede prompt and CLI wiring.
+**Change**:
+- Added `DownloadAsset` and extended `DoneAction` with `published_at`, `release_notes`, `downloads` in `agent/schema.py`.
+- Updated `SYSTEM_PROMPT` action list and task contract to reference eight payload fields (detailed heuristics deferred to phase 09).
+- Verified `parse_action()` accepts v2 sample JSON; rejects v1-shaped and invalid `downloads` entries.
+
+**Result**: `ACTION_JSON_SCHEMA` auto-includes nested downloads; acceptance checks pass locally.
+
+**Follow-ups**: Phase 09 (full prompt heuristics), phase 10 (`_done_payload`, `_is_blank_done`).
+
+---
+
+## 2026-05-30 — v2 planning: richer release metadata
+
+**Phase**: 08–11 (planning)
+**Trigger**: User scoped v2 to BACKLOG item "Richer release metadata" — release notes, download links, publish dates.
+**Change**:
+- Added v2 milestone to `IMPLEMENTATION.md` with phases 08–11 and definition of done.
+- Created phase files: extended schema, prompt heuristics, loop/CLI wiring, validation & docs.
+- Updated `ARCHITECTURE.md` (action schema, navigation flow, failure modes, milestones).
+- Moved richer metadata from `BACKLOG.md` active work; kept `--repo` and flexible prompts as post–v2.
+
+**Result**: Planning complete; implementation not started (phase 08 next).
+
+**Follow-ups**: Implement phase 08 (`DownloadAsset`, extended `DoneAction`).
+
+---
+
 ## 2026-05-30 — End-to-end verified: facebook/react
 
 **Phase**: 07 (ad-hoc)
