@@ -16,19 +16,6 @@ REQUIRED_STRING_FIELDS = (
     "release_notes",
 )
 
-# Substrings that indicate the model confirmed no Assets section on the release page.
-_NO_ASSETS_REASONING_MARKERS = (
-    "no assets",
-    "without assets",
-    "assets absent",
-    "no asset section",
-    "no downloads",
-    "no asset",
-    "assets empty",
-    "assets none",
-)
-
-
 class DownloadAsset(BaseModel):
     name: str
     url: str
@@ -79,32 +66,19 @@ class DoneAction(BaseModel):
     reasoning: str
 
     def is_incomplete_extraction(self) -> bool:
-        """True when the model emitted done before filling required release fields."""
-        if not all(getattr(self, field).strip() for field in REQUIRED_STRING_FIELDS):
-            return True
-        if not self.downloads and not self._claims_no_assets():
-            return True
-        return False
-
-    def _claims_no_assets(self) -> bool:
-        """Empty downloads are OK only when reasoning clearly states no Assets section."""
-        reasoning = self.reasoning.lower()
-        if any(marker in reasoning for marker in _NO_ASSETS_REASONING_MARKERS):
-            return True
-        if "assets" in reasoning and any(
-            word in reasoning for word in ("absent", "empty", "none", "missing")
-        ):
-            return True
-        return False
+        """True when required string fields are blank (downloads checked in github_release)."""
+        return not all(
+            getattr(self, field).strip() for field in REQUIRED_STRING_FIELDS
+        )
 
 
 Action = Annotated[
     Union[ClickAction, TypeAction, PressKeyAction, ScrollAction, WaitAction, DoneAction],
-    Field(discriminator="action"),
+    Field(discriminator="action"),  # Pydantic picks the model from the "action" string.
 ]
 
 _ACTION_ADAPTER: TypeAdapter[Action] = TypeAdapter(Action)
-ACTION_JSON_SCHEMA = _ACTION_ADAPTER.json_schema()
+ACTION_JSON_SCHEMA = _ACTION_ADAPTER.json_schema()  # Passed to Ollama format= and Gemini schema.
 
 
 def validate_action(data: object) -> Action:

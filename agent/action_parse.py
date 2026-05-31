@@ -118,6 +118,72 @@ def _repair_json(text: str) -> str:
     return re.sub(r",(\s*[}\]])", r"\1", text)
 
 
+def _repair_click_coords(text: str) -> str:
+    """Fix Ollama click coord quirks: missing y key, or y key missing its opening quote."""
+    # "x":40, 149 -> "x":40,"y":149
+    text = re.sub(r'("x"\s*:\s*\d+)\s*,\s*(\d+)(?=\s*[,}])', r'\1,"y":\2', text)
+    # "x":327, y":278" or "x":112, y":129," -> "x":...,"y":129
+    text = re.sub(r',\s*y"\s*:\s*(\d+)"?', r',"y":\1', text)
+    return text
+
+
+def _quote_bare_keys(text: str) -> str:
+    """Quote bare identifier keys (e.g. x:620) outside string literals for json.loads."""
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    in_string = False
+    escape = False
+    quote = ""
+
+    while i < n:
+        ch = text[i]
+
+        if in_string:
+            out.append(ch)
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == quote:
+                in_string = False
+            i += 1
+            continue
+
+        if ch in ('"', "'"):
+            in_string = True
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+
+        if ch in "{,":
+            out.append(ch)
+            i += 1
+            while i < n and text[i].isspace():
+                out.append(text[i])
+                i += 1
+            # After { or , an identifier followed by : is a bare key (Ollama quirk).
+            if i < n and (text[i].isalpha() or text[i] == "_"):
+                key_start = i
+                while i < n and (text[i].isalnum() or text[i] == "_"):
+                    i += 1
+                key = text[key_start:i]
+                while i < n and text[i].isspace():
+                    i += 1
+                if i < n and text[i] == ":":
+                    out.append(f'"{key}"')
+                    continue
+                out.append(key)
+                continue
+            continue
+
+        out.append(ch)
+        i += 1
+
+    return "".join(out)
+
+
 def _repair_truncated_tail(text: str) -> str:
     """Close JSON cut off before reasoning or closing brace (common Ollama truncation)."""
     t = text.strip()
@@ -132,7 +198,7 @@ def _repair_truncated_tail(text: str) -> str:
 
 def _salvage_truncated_action(text: str) -> dict[str, Any] | None:
     """Rebuild a valid navigation action dict when the response was cut off mid-JSON."""
-    stripped = text.strip()
+    stripped = _repair_click_coords(text.strip())
     if not stripped.startswith("{"):
         return None
 
@@ -169,9 +235,19 @@ def _normalize_action_payload(data: object) -> object:
         if "y" not in normalized:
             normalized["y"] = x_val[1]
 
-    # Scroll actions occasionally omit direction.
-    if normalized.get("action") == "scroll" and "direction" not in normalized:
-        normalized["direction"] = "down"
+    # Scroll: default direction; fix negative amount (model uses -1 instead of direction up).
+    if normalized.get("action") == "scroll":
+        amount = normalized.get("amount")
+        if isinstance(amount, int):
+            if amount < 0:
+                normalized["amount"] = min(abs(amount), 10)
+                normalized["direction"] = "up"
+            elif amount == 0:
+                normalized["amount"] = 1
+            else:
+                normalized["amount"] = max(1, min(10, amount))
+        if "direction" not in normalized:
+            normalized["direction"] = "down"
 
     if "reasoning" not in normalized:
         normalized["reasoning"] = ""
@@ -184,24 +260,44 @@ def _loads_json(raw: str, *, lenient: bool) -> object:
     if not lenient:
         return json.loads(text)
 
-    candidates = [text, _repair_json(text), _repair_truncated_tail(text)]
+    # Try progressively repaired variants before falling back to regex salvage.
+    repaired = _repair_json(text)
+    coords = _repair_click_coords(repaired)
+    quoted = _quote_bare_keys(coords)
+    candidates = [
+        text,
+        repaired,
+        coords,
+        quoted,
+        _repair_truncated_tail(text),
+        _repair_truncated_tail(coords),
+        _repair_truncated_tail(quoted),
+    ]
+    seen: set[str] = set()
     last_err: json.JSONDecodeError | None = None
     for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
         try:
             return json.loads(candidate)
         except json.JSONDecodeError as err:
             last_err = err
 
-    salvaged = _salvage_truncated_action(text)
+    # Last resort: pull partial fields from truncated JSON via per-action regex.
+    salvage_source = _quote_bare_keys(_repair_click_coords(repaired))
+    salvaged = _salvage_truncated_action(salvage_source)
     if salvaged is not None:
         return salvaged
 
-    try:
-        value = ast.literal_eval(text)
-    except (SyntaxError, ValueError):
-        value = None
-    if isinstance(value, dict):
-        return value
+    # Python dict syntax (single-quoted keys) from some Ollama outputs.
+    for literal_source in (text, quoted, salvage_source):
+        try:
+            value = ast.literal_eval(literal_source)
+        except (SyntaxError, ValueError):
+            continue
+        if isinstance(value, dict):
+            return value
 
     assert last_err is not None
     raise last_err

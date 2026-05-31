@@ -69,6 +69,36 @@ def test_parse_action_strict_rejects_invalid_json() -> None:
             "scroll",
             {"direction": "down", "amount": 2, "reasoning": "read notes"},
         ),
+        (
+            '{"action":"click",x:620,y:85,"reasoning":"tap"}',
+            "click",
+            {"x": 620, "y": 85, "reasoning": "tap"},
+        ),
+        (
+            '{"action":"scroll",direction:"down",amount:2,"reasoning":"read notes"}',
+            "scroll",
+            {"direction": "down", "amount": 2, "reasoning": "read notes"},
+        ),
+        (
+            '{"action":"scroll","amount":-1,"reasoning":"scroll up"}',
+            "scroll",
+            {"direction": "up", "amount": 1, "reasoning": "scroll up"},
+        ),
+        (
+            '{action:"click",x:100,y:200}',
+            "click",
+            {"x": 100, "y": 200, "reasoning": ""},
+        ),
+        (
+            '{"action":"click","x":40, 149,"reasoning":"tap"}',
+            "click",
+            {"x": 40, "y": 149, "reasoning": "tap"},
+        ),
+        (
+            '{"action":"click","x":112, y":129,"reasoning":"sidebar"}',
+            "click",
+            {"x": 112, "y": 129, "reasoning": "sidebar"},
+        ),
     ],
 )
 def test_parse_action_lenient(raw: str, expected_action: str, expected_fields: dict) -> None:

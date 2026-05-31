@@ -1,4 +1,4 @@
-"""Tests for DoneAction extraction completeness checks."""
+"""Tests for DoneAction required-field validation."""
 
 from __future__ import annotations
 
@@ -35,24 +35,7 @@ def _complete_done(**overrides: object) -> DoneAction:
         (_complete_done(author=""), True),
         (_complete_done(published_at=""), True),
         (_complete_done(release_notes=""), True),
-        (
-            _complete_done(
-                downloads=[],
-                reasoning="confirmed no assets on this release",
-            ),
-            False,
-        ),
-        (
-            _complete_done(
-                downloads=[],
-                reasoning="assets section is empty",
-            ),
-            False,
-        ),
-        (
-            _complete_done(downloads=[], reasoning="finished reading release notes"),
-            True,
-        ),
+        (_complete_done(downloads=[], reasoning="no assets"), False),
     ],
 )
 def test_is_incomplete_extraction(done: DoneAction, expected_incomplete: bool) -> None:
@@ -60,7 +43,7 @@ def test_is_incomplete_extraction(done: DoneAction, expected_incomplete: bool) -
 
 
 def test_partial_v1_fields_rejected() -> None:
-    """any()-style bug would accept one filled v1 field; all() requires every field."""
+    """all() requires every required string field; downloads are validated separately."""
     done = DoneAction(
         action="done",
         repository="facebook/react",

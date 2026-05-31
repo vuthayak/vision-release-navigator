@@ -17,7 +17,7 @@ Build the vision layer: Pydantic action schema, system prompt, and provider clie
 - `agent/gemini_client.py` — `GeminiVisionClient` (optional fallback).
 - `agent/vision.py` — `create_vision_client()` factory and `VisionClient` protocol.
 
-> **Current layout (post–v2 refactor):** `SYSTEM_PROMPT` → `prompts.py`; parsing/normalization/retry nudge → `action_parse.py`; `decide_with_retry()` / `parse_action_with_retry()` → `vision_parse.py`; shared defaults → `defaults.py`; `VisionParseError` → `errors.py`. `schema.py` retains Pydantic models and `validate_action()` only.
+> **Current layout (post–v2 refactor, v3 normalization):** `SYSTEM_PROMPT` → `prompts.py`; parsing/normalization/retry nudge → `action_parse.py` (includes `_quote_bare_keys()` since v3); `decide_with_retry()` / `parse_action_with_retry()` → `vision_parse.py`; shared defaults → `defaults.py`; `VisionParseError` → `errors.py`. `schema.py` retains Pydantic models and `validate_action()` only.
 
 ## File layout
 
@@ -47,7 +47,7 @@ Each variant includes a `reasoning: str` field (used for logging; may be empty i
 - [x] Implement `OllamaVisionClient` with cloud (`https://ollama.com` + API key) and local support.
 - [x] Implement `GeminiVisionClient` as optional fallback.
 - [x] `decide_next_action`: send system prompt + user text + screenshot; parse and validate response.
-- [x] Robust `parse_action()`: strip fences, extract JSON object, repair trailing commas, fill missing `reasoning`.
+- [x] Robust `parse_action()` / `parse_action_lenient()`: strip fences, extract JSON object, repair trailing commas, quote bare keys (`_quote_bare_keys`), salvage truncated responses, fill missing `reasoning`.
 - [x] Retry once on `JSONDecodeError` or `ValidationError` via `action_retry_message()`.
 - [x] Format history compactly — only `action` + `reasoning`; cap reasoning at ~200 chars.
 - [x] Expose `SYSTEM_PROMPT` as a module-level constant.
@@ -58,10 +58,10 @@ Each variant includes a `reasoning: str` field (used for logging; may be empty i
 1. **Role**: vision-driven browser agent, one action per turn.
 2. **Coordinate convention**: 0–1000 normalized; (500, 500) is center of viewport.
 3. **Available actions**: brief list (Pydantic enforces after response).
-4. **Task contract**: starting from the given URL, fulfill the user prompt and emit `done` with the five required fields from a **stable** release.
+4. **Task contract**: starting from the given URL, fulfill the user prompt and emit `done` with all eight required fields from a **stable** release (v2/v3 output schema).
 5. **No selectors**: explain you only see pixels; don't reference DOM concepts.
 6. **GitHub heuristics** (without hardcoded selectors): search bar at top; visible "Releases" label; skip pre-releases; scroll if needed.
-7. **Stop condition**: emit `done` only when all five fields are readable from a stable release.
+7. **Stop condition**: emit `done` only when all eight output fields are readable from a stable release (v2/v3).
 
 ## Acceptance criteria
 

@@ -13,9 +13,11 @@ DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 )
-WHEEL_DELTA_PX = 120
+WHEEL_DELTA_PX = 120  # Playwright wheel units; amount 1-10 maps to this many ticks.
 _NAVIGATION_KEYS = frozenset({"enter", "return"})
-_NETWORK_IDLE_TIMEOUT_MS = 8000
+# Vision models often emit "Back" — Playwright expects Alt+Left or page.go_back() instead.
+_HISTORY_KEYS = frozenset({"back", "browserback", "alt+left", "forward", "browserforward", "alt+right"})
+_NETWORK_IDLE_TIMEOUT_MS = 8000  # Best-effort wait after clicks; timeout is swallowed.
 
 
 class Browser:
@@ -54,6 +56,7 @@ class Browser:
         return self._page
 
     def _denorm(self, nx: int, ny: int) -> tuple[int, int]:
+        # Map 0-1000 model space to viewport pixels; clamp so (1000,1000) stays in bounds.
         w, h = self._viewport
         return min(round(nx / 1000 * w), w - 1), min(round(ny / 1000 * h), h - 1)
 
@@ -62,6 +65,7 @@ class Browser:
         try:
             page.wait_for_load_state("networkidle", timeout=_NETWORK_IDLE_TIMEOUT_MS)
         except PlaywrightTimeoutError:
+            # SPAs may never reach networkidle; don't block the agent loop indefinitely.
             pass
 
     def _after_action(self, *, wait_for_navigation: bool) -> None:
@@ -99,16 +103,36 @@ class Browser:
     def type_text(self, text: str) -> None:
         self._require_page().keyboard.type(text)
 
+    def scroll_to_bottom(self) -> None:
+        """Jump to the bottom of the page (Assets on GitHub release detail pages)."""
+        page = self._require_page()
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+
     def press_key(self, key: str) -> None:
-        self._require_page().keyboard.press(key)
-        self._after_action(wait_for_navigation=key.lower() in _NAVIGATION_KEYS)
+        page = self._require_page()
+        normalized = key.strip().lower().replace(" ", "")
+        if normalized in {"back", "browserback"}:
+            page.go_back(wait_until="domcontentloaded")
+            self._after_action(wait_for_navigation=True)
+            return
+        if normalized in {"forward", "browserforward"}:
+            page.go_forward(wait_until="domcontentloaded")
+            self._after_action(wait_for_navigation=True)
+            return
+        if normalized in {"end", "meta+arrowdown"}:
+            self.scroll_to_bottom()
+            return
+        page.keyboard.press(key)
+        # Enter/Return often triggers navigation (search submit, form submit).
+        waits = normalized in _NAVIGATION_KEYS or normalized in _HISTORY_KEYS
+        self._after_action(wait_for_navigation=waits)
 
     def scroll(self, direction: Literal["up", "down"], amount: int) -> None:
         page = self._require_page()
         delta = amount * WHEEL_DELTA_PX
         if direction == "up":
             delta = -delta
-        page.mouse.wheel(0, delta)
+        page.mouse.wheel(0, delta)  # No networkidle wait — scroll is in-page only.
 
     def wait(self, ms: int) -> None:
         time.sleep(ms / 1000.0)

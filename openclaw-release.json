@@ -1,0 +1,24 @@
+{
+  "action": "done",
+  "repository": "openclaw/openclaw",
+  "latest_release": "v2026.5.30-beta.1",
+  "version": "2026.5.30-beta.1",
+  "tag": "v2026.5.30-beta.1",
+  "author": "stevenepalmer",
+  "published_at": "11 hours ago",
+  "release_notes": "npm package: https://www.npmjs.com/package/openclaw/v/2026.5.30-beta.1\nregistry tarball: https://registry.npmjs.org/openclaw/-/openclaw-2026.5.30-beta.1.tgz\nintegrity: sha512-...",
+  "downloads": [
+    {
+      "name": "openclaw-2026.5.30-beta.1-dependency-evidence.zip",
+      "url": "https://github.com/openclaw/openclaw/releases/download/v2026.5.30-beta.1/openclaw-2026.5.30-beta.1-dependency-evidence.zip"
+    },
+    {
+      "name": "Source code (zip)",
+      "url": "https://github.com/openclaw/openclaw/archive/refs/tags/v2026.5.30-beta.1.zip"
+    },
+    {
+      "name": "Source code (tar.gz)",
+      "url": "https://github.com/openclaw/openclaw/archive/refs/tags/v2026.5.30-beta.1.tar.gz"
+    }
+  ]
+}

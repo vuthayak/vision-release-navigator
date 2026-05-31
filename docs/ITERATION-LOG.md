@@ -16,6 +16,65 @@ Reverse-chronological log of meaningful changes, learnings, and decisions. New e
 
 ---
 
+## 2026-05-31 — OpenClaw E2E complete (phase 14)
+
+**Phase**: 14
+**Trigger**: User re-ran canonical command after End-workflow and prompt fixes; exit 0 with committed artifact.
+**Change**:
+- [`openclaw-release.json`](../openclaw-release.json) at repo root: `openclaw/openclaw`, tag `v2026.5.30-beta.1`, partial notes, non-empty `downloads`.
+- Tracker/docs: v3 milestone **Done**; phase 14 unblocked; IMPLEMENTATION + README + ARCHITECTURE synced.
+**Result**: Phase 14 acceptance met; v3 definition-of-done E2E checkboxes ticked.
+**Follow-ups**: Optional code-quality refactors from review (policy consolidation, loop enforcement of End on detail pages).
+
+---
+
+## 2026-05-31 — Long changelog scroll loop (openclaw E2E)
+
+**Phase**: 14 follow-up
+**Trigger**: OpenClaw run hit max steps 30 — model scrolled up/down through huge release notes hunting for Assets/header; invalid `scroll.amount: -1` JSON at steps 14 and 21.
+**Change**:
+- Prompt: long-changelog rule — partial notes OK, max 3 scrolls in detail view, never ping-pong up/down, emit done when mid-changelog with no title visible.
+- `_normalize_action_payload`: negative scroll amount → `direction: up`, positive amount.
+- Loop: `_scroll_oscillation_instruction()` and `_scroll_budget_instruction()` nudge model to emit done.
+- Schema: accept empty downloads when reasoning says Assets not visible after scrolling.
+
+**Result**: 49 tests pass. Re-run OpenClaw E2E.
+
+**Follow-ups**: Commit `openclaw-release.json` on successful run.
+
+---
+
+## 2026-05-31 — OpenClaw E2E fixes: Sponsors mis-click, Back key, click JSON
+
+**Phase**: 14 follow-up
+**Trigger**: User E2E on `openclaw/openclaw` — step 06 clicked Sponsors not Releases; invalid click JSON at step 6; crash on `press_key` `"Back"`.
+**Change**:
+- Prompt: sidebar discrimination (Releases vs Sponsors/Sponsor/etc.); recover via repo name link, not Back.
+- `browser.press_key()`: map Back/Forward to `page.go_back()` / `go_forward()`.
+- `action_parse.py`: `_repair_click_coords()` for `"x":40, 149` and `y":278"` malformations; extended click salvage regex.
+
+**Result**: 19 parse/browser tests pass. Re-run canonical OpenClaw command when API quota available.
+
+**Follow-ups**: Complete phase 14 E2E; commit `openclaw-release.json`.
+
+---
+
+## 2026-05-30 — v3 ship: JSON normalization, comments, OpenClaw E2E blocked
+
+**Phase**: 12–15
+**Trigger**: v3 milestone plan; final validation target `openclaw/openclaw`; API rate limits hit same day.
+**Change**:
+- Added `_quote_bare_keys()` to `action_parse.py` lenient parse path; 3 new unit tests for unquoted keys.
+- Inline comments across `loop.py`, `action_parse.py`, `browser.py`, `schema.py`, `vision_parse.py`, vision backends, `navigate.py`.
+- Partial OpenClaw E2E: 25 steps to **2026.5.28 Latest** release detail before Ollama 429; debug screenshots in `screenshots/step_*`.
+- Updated README, IMPLEMENTATION, ARCHITECTURE, BACKLOG, phase files 12–15; added v3 at-a-glance, lenient parse pipeline docs, README documentation table.
+
+**Result**: **Code pass** — 41 unit tests green. E2E **blocked** — no `openclaw-release.json` yet; user to re-run canonical command when quota resets.
+
+**Follow-ups**: Run phase 14 canonical command with `--output openclaw-release.json`; commit artifact; tick v3 E2E checkbox in IMPLEMENTATION.md.
+
+---
+
 ## 2026-05-30 — Post-v2 hardening: time budget, scroll, JSON salvage
 
 **Phase**: 11 follow-up
@@ -28,7 +87,7 @@ Reverse-chronological log of meaningful changes, learnings, and decisions. New e
 
 **Result**: **Pass** — `--headed --debug` on `facebook/react`, 9 steps, exit 0, correct **19.2.6** with full v2 fields. Mid-run `[vision:ollama] invalid JSON` warnings still appear but run completes.
 
-**Follow-ups**: Implement backlog **Action JSON normalization** when ready.
+**Follow-ups**: ~~Implement backlog **Action JSON normalization** when ready.~~ Shipped in v3 (phase 12).
 
 ---
 

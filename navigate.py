@@ -83,7 +83,7 @@ def _resolve_model(provider: str, cli_model: str | None) -> str:
 
 def _emit_result(payload: dict[str, Any], output_path: str | None) -> None:
     text = json.dumps(payload, indent=2)
-    print(text)
+    print(text)  # stdout is the primary contract for piping / CI.
     if output_path:
         Path(output_path).write_text(text + "\n", encoding="utf-8")
 
@@ -99,6 +99,7 @@ def run(args: argparse.Namespace) -> int:
     debug_dir = Path("screenshots") if args.debug else None
 
     try:
+        # Wire vision backend from env + CLI flags.
         vision = create_vision_client(
             provider,
             model=model,
@@ -121,6 +122,7 @@ def run(args: argparse.Namespace) -> int:
             debug_vision=args.debug,
         )
 
+    # Strip internal reasoning field before emitting the public release JSON.
     payload = done.model_dump(exclude={"reasoning"})
     _emit_result(payload, args.output)
     return 0

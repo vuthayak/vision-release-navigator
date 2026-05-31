@@ -42,6 +42,7 @@ def parse_action_with_retry(
     except (json.JSONDecodeError, ValidationError) as first_err:
         if debug:
             _log_invalid_action_json(provider, first_err, raw)
+        # Single retry with explicit correction prompt — no infinite loops.
         retry_raw = retry_fn(action_retry_message(raw, first_err))
         try:
             return parse_fn(retry_raw)

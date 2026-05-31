@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from agent.browser import Browser
+from agent.github_release import build_extra_instruction, done_rejection_reason
 from agent.schema import (
     Action,
     ClickAction,
@@ -20,8 +21,8 @@ from agent.schema import (
 )
 from agent.vision import VisionClient
 
-HISTORY_LIMIT = 6
-NO_PROGRESS_STREAK = 3
+HISTORY_LIMIT = 6  # Keep recent turns in the prompt without blowing context size.
+NO_PROGRESS_STREAK = 3  # Nudge the model after this many identical screenshot+URL pairs.
 
 
 class AgentLoopError(Exception):
@@ -29,6 +30,7 @@ class AgentLoopError(Exception):
 
 
 def _screenshot_hash(png: bytes) -> str:
+    # Cheap change detector — same hash + URL means the last action had no visible effect.
     return hashlib.sha256(png).hexdigest()
 
 
@@ -56,6 +58,7 @@ def _write_debug_artifacts(
 
 
 def _apply_action(browser: Browser, action: Action) -> None:
+    # Pattern-match dispatches to browser primitives; DoneAction is handled before this runs.
     match action:
         case ClickAction():
             browser.click(action.x, action.y)
@@ -95,10 +98,12 @@ def run_agent_loop(
                 f"Time budget exceeded ({time_budget_s:.0f}s) after {step - 1} steps"
             )
 
+        # 1. Observe current page state.
         png = browser.screenshot()
         url = browser.current_url()
         shot_hash = _screenshot_hash(png)
 
+        # 2. Detect stale loops (same pixels after a non-wait action).
         if (
             last_url == url
             and last_hash == shot_hash
@@ -112,11 +117,14 @@ def run_agent_loop(
         last_url = url
         last_hash = shot_hash
 
-        if stale_streak >= NO_PROGRESS_STREAK:
-            extra_instruction = _no_progress_instruction(NO_PROGRESS_STREAK)
-        else:
-            extra_instruction = None
+        extra_instruction = build_extra_instruction(
+            history,
+            stale_streak,
+            no_progress_streak=NO_PROGRESS_STREAK,
+            no_progress_message=_no_progress_instruction(NO_PROGRESS_STREAK),
+        )
 
+        # 3. Ask the vision model for the next action.
         action = vision.decide_next_action(
             png,
             user_prompt,
@@ -130,13 +138,11 @@ def run_agent_loop(
             _write_debug_artifacts(debug_dir, step, png, action)
 
         if isinstance(action, DoneAction):
-            if action.is_incomplete_extraction():
-                raise AgentLoopError(
-                    "Model returned done with incomplete extraction "
-                    "(blank v1/v2 fields or empty downloads without no-assets reasoning)"
-                )
+            if reason := done_rejection_reason(url, history, action):
+                raise AgentLoopError(reason)
             return action
 
+        # 4. Execute navigation action and record it for the next turn.
         _apply_action(browser, action)
 
         history.append(action)

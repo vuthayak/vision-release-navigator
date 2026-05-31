@@ -62,3 +62,4 @@ A `README.md` covering:
 ## Notes
 
 - Keep the design-notes section short and concrete — reviewers care more about *why* than *what*. The architecture deep-dive belongs in `docs/ARCHITECTURE.md`.
+- **v3 updates (2026-05-30)**: README gained v3 milestone notes, sample artifact instructions, documentation table, and rate-limit troubleshooting; see phases 12–15 and [IMPLEMENTATION.md](../IMPLEMENTATION.md).

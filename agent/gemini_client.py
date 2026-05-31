@@ -29,7 +29,7 @@ class GeminiVisionClient:
         config = types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT,
             response_mime_type="application/json",
-            response_json_schema=ACTION_JSON_SCHEMA,
+            response_json_schema=ACTION_JSON_SCHEMA,  # Enforced structured output from Gemini.
             temperature=0,
         )
         try:
@@ -94,6 +94,7 @@ class GeminiVisionClient:
         def call_retry(
             original_raw: str, retry_text: str
         ) -> tuple[str, types.GenerateContentResponse]:
+            # Multi-turn: replay the bad response, then send the correction prompt.
             retry_contents = [
                 *contents,
                 types.Content(role="model", parts=[types.Part.from_text(text=original_raw)]),
@@ -107,7 +108,7 @@ class GeminiVisionClient:
             call_initial=call_initial,
             call_retry=call_retry,
             log_debug=self._log_debug,
-            parse_fn=parse_action,
+            parse_fn=parse_action,  # Gemini JSON is reliable enough for strict parse.
             debug=debug,
             make_error=lambda err: VisionParseError(
                 "Gemini returned invalid action JSON after retry. "

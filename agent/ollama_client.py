@@ -15,7 +15,7 @@ from agent.schema import ACTION_JSON_SCHEMA, Action
 from agent.vision_parse import decide_with_retry
 
 
-OLLAMA_CHAT_OPTIONS = {"temperature": 0, "num_predict": 1024}
+OLLAMA_CHAT_OPTIONS = {"temperature": 0, "num_predict": 1024}  # num_predict caps JSON length.
 
 
 class OllamaConnectionError(VisionClientError):
@@ -44,7 +44,7 @@ class OllamaVisionClient:
             response = self._client.chat(
                 model=self._model,
                 messages=messages,
-                format=ACTION_JSON_SCHEMA,
+                format=ACTION_JSON_SCHEMA,  # Structured output hint; Ollama still malforms sometimes.
                 options=OLLAMA_CHAT_OPTIONS,
             )
         except (ResponseError, ConnectionError, OSError) as exc:
@@ -111,7 +111,7 @@ class OllamaVisionClient:
             call_initial=call_initial,
             call_retry=call_retry,
             log_debug=self._log_debug,
-            parse_fn=parse_action_lenient,
+            parse_fn=parse_action_lenient,  # Ollama needs repair/salvage path.
             debug=debug,
             make_error=lambda err: VisionParseError(
                 "Ollama returned invalid action JSON after retry. "
