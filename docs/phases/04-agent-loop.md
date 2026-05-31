@@ -19,7 +19,7 @@ Glue `Browser` and `VisionClient` together in `agent/loop.py`. This is the heart
       vision: VisionClient,
       user_prompt: str,
       max_steps: int = 25,
-      time_budget_s: float = 180.0,
+      time_budget_s: float = 420.0,
       debug_dir: Path | None = None,
       debug_vision: bool = False,
   ) -> DoneAction: ...

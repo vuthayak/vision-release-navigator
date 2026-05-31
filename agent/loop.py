@@ -9,7 +9,16 @@ import time
 from pathlib import Path
 
 from agent.browser import Browser
-from agent.vision import Action, DoneAction, VisionClient
+from agent.schema import (
+    Action,
+    ClickAction,
+    DoneAction,
+    PressKeyAction,
+    ScrollAction,
+    TypeAction,
+    WaitAction,
+)
+from agent.vision import VisionClient
 
 HISTORY_LIMIT = 6
 NO_PROGRESS_STREAK = 3
@@ -23,23 +32,53 @@ def _screenshot_hash(png: bytes) -> str:
     return hashlib.sha256(png).hexdigest()
 
 
-def _is_blank_done(action: DoneAction) -> bool:
-    fields = (
-        action.repository,
-        action.latest_release,
-        action.version,
-        action.tag,
-        action.author,
+def _no_progress_instruction(streak: int) -> str:
+    return (
+        f"The page has not changed for the last {streak} actions. "
+        "Try scrolling, clicking a different control, or reconsider your approach."
     )
-    return not any(f.strip() for f in fields)
+
+
+def _write_debug_artifacts(
+    debug_dir: Path, step: int, png: bytes, action: Action
+) -> None:
+    print(
+        f"[step {step:02d}] {action.action}: {action.reasoning[:120]}",
+        file=sys.stderr,
+    )
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    stem = f"step_{step:02d}"
+    (debug_dir / f"{stem}.png").write_bytes(png)
+    (debug_dir / f"{stem}.json").write_text(
+        json.dumps(action.model_dump(), indent=2),
+        encoding="utf-8",
+    )
+
+
+def _apply_action(browser: Browser, action: Action) -> None:
+    match action:
+        case ClickAction():
+            browser.click(action.x, action.y)
+        case TypeAction():
+            browser.type_text(action.text)
+        case PressKeyAction():
+            browser.press_key(action.key)
+        case ScrollAction():
+            browser.scroll(action.direction, action.amount)
+        case WaitAction():
+            browser.wait(action.ms)
+        case DoneAction():
+            raise AgentLoopError("internal error: done action reached dispatch")
+        case _:
+            raise AgentLoopError(f"Unknown action type: {type(action).__name__}")
 
 
 def run_agent_loop(
     browser: Browser,
     vision: VisionClient,
     user_prompt: str,
-    max_steps: int = 25,
-    time_budget_s: float = 180.0,
+    max_steps: int = 30,
+    time_budget_s: float = 420.0,
     debug_dir: Path | None = None,
     debug_vision: bool = False,
 ) -> DoneAction:
@@ -74,10 +113,7 @@ def run_agent_loop(
         last_hash = shot_hash
 
         if stale_streak >= NO_PROGRESS_STREAK:
-            extra_instruction = (
-                "The page has not changed for the last 3 actions. "
-                "Try scrolling, clicking a different control, or reconsider your approach."
-            )
+            extra_instruction = _no_progress_instruction(NO_PROGRESS_STREAK)
         else:
             extra_instruction = None
 
@@ -91,30 +127,17 @@ def run_agent_loop(
         )
 
         if debug_dir:
-            print(f"[step {step:02d}] {action.action}: {action.reasoning[:120]}", file=sys.stderr)
-            debug_dir.mkdir(parents=True, exist_ok=True)
-            stem = f"step_{step:02d}"
-            (debug_dir / f"{stem}.png").write_bytes(png)
-            payload = action.model_dump()
-            (debug_dir / f"{stem}.json").write_text(
-                json.dumps(payload, indent=2), encoding="utf-8"
-            )
+            _write_debug_artifacts(debug_dir, step, png, action)
 
-        if action.action == "done":
-            if _is_blank_done(action):
-                raise AgentLoopError("Model returned done with all fields empty")
+        if isinstance(action, DoneAction):
+            if action.is_incomplete_extraction():
+                raise AgentLoopError(
+                    "Model returned done with incomplete extraction "
+                    "(blank v1/v2 fields or empty downloads without no-assets reasoning)"
+                )
             return action
 
-        if action.action == "click":
-            browser.click(action.x, action.y)
-        elif action.action == "type":
-            browser.type_text(action.text)
-        elif action.action == "press_key":
-            browser.press_key(action.key)
-        elif action.action == "scroll":
-            browser.scroll(action.direction, action.amount)
-        elif action.action == "wait":
-            browser.wait(action.ms)
+        _apply_action(browser, action)
 
         history.append(action)
         if len(history) > HISTORY_LIMIT:

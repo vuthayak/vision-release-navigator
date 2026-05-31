@@ -17,6 +17,8 @@ Build the vision layer: Pydantic action schema, system prompt, and provider clie
 - `agent/gemini_client.py` — `GeminiVisionClient` (optional fallback).
 - `agent/vision.py` — `create_vision_client()` factory and `VisionClient` protocol.
 
+> **Current layout (post–v2 refactor):** `SYSTEM_PROMPT` → `prompts.py`; parsing/normalization/retry nudge → `action_parse.py`; `decide_with_retry()` / `parse_action_with_retry()` → `vision_parse.py`; shared defaults → `defaults.py`; `VisionParseError` → `errors.py`. `schema.py` retains Pydantic models and `validate_action()` only.
+
 ## File layout
 
 | File | Responsibility |

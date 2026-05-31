@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import base64
-import json
 import sys
 
 from ollama import Client, ResponseError
-from pydantic import ValidationError
 
-from agent.schema import (
-    ACTION_JSON_SCHEMA,
-    SYSTEM_PROMPT,
-    Action,
-    action_retry_message,
-    build_user_text,
-    parse_action,
-)
+from agent.action_parse import build_user_text, parse_action_lenient
+from agent.defaults import DEFAULT_OLLAMA_HOST, DEFAULT_OLLAMA_MODEL
+from agent.errors import VisionClientError, VisionParseError
+from agent.prompts import SYSTEM_PROMPT
+from agent.schema import ACTION_JSON_SCHEMA, Action
+from agent.vision_parse import decide_with_retry
 
 
-class OllamaConnectionError(Exception):
+OLLAMA_CHAT_OPTIONS = {"temperature": 0, "num_predict": 1024}
+
+
+class OllamaConnectionError(VisionClientError):
     """Raised when Ollama is unreachable or the model is missing."""
 
 
@@ -31,21 +30,46 @@ def ollama_requires_api_key(host: str) -> bool:
 class OllamaVisionClient:
     def __init__(
         self,
-        model: str = "qwen2.5vl:3b",
-        host: str = "https://ollama.com",
+        model: str = DEFAULT_OLLAMA_MODEL,
+        host: str = DEFAULT_OLLAMA_HOST,
         api_key: str | None = None,
     ) -> None:
         self._model = model
         self._host = host
-        headers: dict[str, str] | None = None
-        if api_key:
-            headers = {"Authorization": f"Bearer {api_key}"}
-        elif ollama_requires_api_key(host):
-            raise OllamaConnectionError(
-                "OLLAMA_API_KEY is required for Ollama Cloud. "
-                "Create a key at https://ollama.com/settings/keys"
-            )
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
         self._client = Client(host=host, headers=headers)
+
+    def _chat(self, messages: list[dict], *, on_retry: bool = False) -> tuple[str, dict]:
+        try:
+            response = self._client.chat(
+                model=self._model,
+                messages=messages,
+                format=ACTION_JSON_SCHEMA,
+                options=OLLAMA_CHAT_OPTIONS,
+            )
+        except (ResponseError, ConnectionError, OSError) as exc:
+            if on_retry:
+                raise OllamaConnectionError(
+                    f"Ollama request failed on retry ({exc})."
+                ) from exc
+            hint = (
+                "Check OLLAMA_API_KEY and model name at https://ollama.com/library"
+                if ollama_requires_api_key(self._host)
+                else f"Ensure Ollama is running locally: ollama pull {self._model}"
+            )
+            raise OllamaConnectionError(
+                f"Ollama request failed ({exc}). {hint}"
+            ) from exc
+        return response.message.content or "", response
+
+    def _log_debug(self, response: dict) -> None:
+        duration_ms = (response.get("total_duration") or 0) // 1_000_000
+        target = "cloud" if ollama_requires_api_key(self._host) else "local"
+        print(
+            f"[vision:ollama:{target}] host={self._host} model={self._model} "
+            f"duration_ms={duration_ms}",
+            file=sys.stderr,
+        )
 
     def decide_next_action(
         self,
@@ -71,57 +95,26 @@ class OllamaVisionClient:
             },
         ]
 
-        try:
-            response = self._client.chat(
-                model=self._model,
-                messages=messages,
-                format=ACTION_JSON_SCHEMA,
-                options={"temperature": 0},
-            )
-        except (ResponseError, ConnectionError, OSError) as exc:
-            hint = (
-                "Check OLLAMA_API_KEY and model name at https://ollama.com/library"
-                if ollama_requires_api_key(self._host)
-                else f"Ensure Ollama is running locally: ollama pull {self._model}"
-            )
-            raise OllamaConnectionError(
-                f"Ollama request failed ({exc}). {hint}"
-            ) from exc
+        def call_initial() -> tuple[str, dict]:
+            return self._chat(messages)
 
-        if debug:
-            duration_ms = response.get("total_duration", 0) // 1_000_000
-            target = "cloud" if ollama_requires_api_key(self._host) else "local"
-            print(
-                f"[vision:ollama:{target}] host={self._host} model={self._model} "
-                f"duration_ms={duration_ms}",
-                file=sys.stderr,
-            )
-
-        raw = response.message.content or ""
-        try:
-            return parse_action(raw)
-        except (json.JSONDecodeError, ValidationError) as first_err:
-            retry_text = action_retry_message(raw, first_err)
+        def call_retry(original_raw: str, retry_text: str) -> tuple[str, dict]:
             retry_messages = [
                 *messages,
-                {"role": "assistant", "content": raw},
+                {"role": "assistant", "content": original_raw},
                 {"role": "user", "content": retry_text},
             ]
-            try:
-                retry_response = self._client.chat(
-                    model=self._model,
-                    messages=retry_messages,
-                    format=ACTION_JSON_SCHEMA,
-                    options={"temperature": 0},
-                )
-            except (ResponseError, ConnectionError, OSError) as exc:
-                raise OllamaConnectionError(
-                    f"Ollama request failed on retry ({exc})."
-                ) from exc
-            try:
-                return parse_action(retry_response.message.content or "")
-            except (json.JSONDecodeError, ValidationError) as retry_err:
-                raise OllamaConnectionError(
-                    "Ollama returned invalid action JSON after retry. "
-                    f"Last error: {retry_err}"
-                ) from retry_err
+            return self._chat(retry_messages, on_retry=True)
+
+        return decide_with_retry(
+            provider="ollama",
+            call_initial=call_initial,
+            call_retry=call_retry,
+            log_debug=self._log_debug,
+            parse_fn=parse_action_lenient,
+            debug=debug,
+            make_error=lambda err: VisionParseError(
+                "Ollama returned invalid action JSON after retry. "
+                f"Last error: {err}"
+            ),
+        )

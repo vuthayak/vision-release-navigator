@@ -16,6 +16,116 @@ Reverse-chronological log of meaningful changes, learnings, and decisions. New e
 
 ---
 
+## 2026-05-30 — Post-v2 hardening: time budget, scroll, JSON salvage
+
+**Phase**: 11 follow-up
+**Trigger**: Canonical runs hit 180s timeout; aggressive scrolling selected release `19.1.7` instead of `19.2.6`; Ollama truncated action JSON at step 6 (`column 34`).
+**Change**:
+- Raised default `time_budget_s` **180 → 420** in `agent/loop.py`.
+- Rewrote scroll heuristics in `SYSTEM_PROMPT`: click Latest first, scroll amount 1–2 within release detail only, scroll up if wrong semver visible.
+- Added truncated JSON repair/salvage in `parse_action()`; Ollama `num_predict: 1024`; shorter navigation reasoning in prompt; debug logging of invalid raw JSON.
+- Backlog entry for action JSON normalization (array coords, missing scroll direction, unquoted keys).
+
+**Result**: **Pass** — `--headed --debug` on `facebook/react`, 9 steps, exit 0, correct **19.2.6** with full v2 fields. Mid-run `[vision:ollama] invalid JSON` warnings still appear but run completes.
+
+**Follow-ups**: Implement backlog **Action JSON normalization** when ready.
+
+---
+
+## 2026-05-30 — Phase 11: v2 E2E validation & docs
+
+**Phase**: 11
+**Trigger**: v2 implementation complete (phases 08–10); need end-to-end proof and doc sync.
+**Change**:
+- Ran `python navigate.py ... --headed --debug` (canonical): attempt 1 failed at step 7 (invalid Ollama JSON after retry); attempt 2 hit 180s time budget after 7 steps (slow cloud inference).
+- Ran headless validation with 420s budget: exit 0 in 9 steps; all v2 fields populated (`published_at`, `release_notes`, two `downloads`).
+- Updated `README.md` (v2 schema, limitations, Tested with v2), `ARCHITECTURE.md` (v2 shipped), `IMPLEMENTATION.md` (phases 08–11 Done).
+- Confirmed `rg "querySelector|locator\(|xpath" agent/` — no matches.
+
+**Result**: Initial validation **partial pass** (extended-budget headless run populated all v2 fields but selected `19.1.7`). Superseded by post-v2 hardening entry above (`19.2.6`, 420s default).
+
+**Sample output** (step 09):
+```json
+{
+  "repository": "facebook/react",
+  "latest_release": "19.1.7",
+  "version": "19.1.7",
+  "tag": "v19.1.7",
+  "author": "eps1lon",
+  "published_at": "May 6th, 2026",
+  "release_notes": "React Server Components\n\n* Type hardening and performance improvements\n(#36425 by @eps1lon and @unstubbable)",
+  "downloads": [
+    { "name": "Source code (zip)", "url": "https://github.com/facebook/react/archive/refs/tags/v19.1.7.zip" },
+    { "name": "Source code (tar.gz)", "url": "https://github.com/facebook/react/archive/refs/tags/v19.1.7.tar.gz" }
+  ]
+}
+```
+
+**Follow-ups**: Consider raising default `time_budget_s` for v2 or documenting longer runs; optional prompt tweak to prefer "Latest" semver over older stable entries.
+
+---
+
+## 2026-05-30 — Phase 09: rich extraction prompt
+
+**Phase**: 09
+**Trigger**: v2 requires vision model to gather publish date, release notes, and download assets before emitting `done`.
+**Change**:
+- Rewrote GitHub heuristics in `SYSTEM_PROMPT` with per-field mapping for `published_at`, `release_notes`, and `downloads`.
+- Added scroll-within-release strategy, anti-hallucination clause for URLs, eight-field stop condition, and abbreviated example `done` JSON.
+- Documented recommendation to raise `max_steps` from 25 to 30 in phase 10.
+
+**Result**: Prompt mentions all eight output fields and ties v2 fields to visual regions; no selectors added.
+
+**Follow-ups**: Phase 10 (`is_incomplete_extraction`, CLI stdout, optional `max_steps` bump).
+
+---
+
+## 2026-05-30 — Phase 10: loop & CLI v2 wiring
+
+**Phase**: 10
+**Trigger**: Phase 08 schema landed; loop and CLI still emitted v1 five-field JSON and blank-done guard.
+**Change**:
+- Extended `is_incomplete_extraction()` to require non-empty `published_at` and `release_notes`; empty `downloads` allowed.
+- `_done_payload()` and stdout/`--output` now serialize all eight v2 fields including nested downloads.
+- Default `max_steps` raised 25 → 30; exported `DownloadAsset` from `agent/vision.py`.
+
+**Result**: Incomplete v2 extractions raise `AgentLoopError` → exit 1 (same as v1 blank done).
+
+**Follow-ups**: Phase 09 (prompt heuristics for scroll/assets), phase 11 (E2E smoke, README).
+
+---
+
+## 2026-05-30 — Phase 08: extended `done` schema
+
+**Phase**: 08
+**Trigger**: v2 implementation — schema must precede prompt and CLI wiring.
+**Change**:
+- Added `DownloadAsset` and extended `DoneAction` with `published_at`, `release_notes`, `downloads` in `agent/schema.py`.
+- Updated `SYSTEM_PROMPT` action list and task contract to reference eight payload fields (detailed heuristics deferred to phase 09).
+- Verified `parse_action()` accepts v2 sample JSON; rejects v1-shaped and invalid `downloads` entries.
+
+**Result**: `ACTION_JSON_SCHEMA` auto-includes nested downloads; acceptance checks pass locally.
+
+**Follow-ups**: Phase 09 (full prompt heuristics), phase 10 (`_done_payload`, `is_incomplete_extraction`).
+
+---
+
+## 2026-05-30 — v2 planning: richer release metadata
+
+**Phase**: 08–11 (planning)
+**Trigger**: User scoped v2 to BACKLOG item "Richer release metadata" — release notes, download links, publish dates.
+**Change**:
+- Added v2 milestone to `IMPLEMENTATION.md` with phases 08–11 and definition of done.
+- Created phase files: extended schema, prompt heuristics, loop/CLI wiring, validation & docs.
+- Updated `ARCHITECTURE.md` (action schema, navigation flow, failure modes, milestones).
+- Moved richer metadata from `BACKLOG.md` active work; kept `--repo` and flexible prompts as post–v2.
+
+**Result**: Planning complete; implementation not started (phase 08 next).
+
+**Follow-ups**: Implement phase 08 (`DownloadAsset`, extended `DoneAction`).
+
+---
+
 ## 2026-05-30 — End-to-end verified: facebook/react
 
 **Phase**: 07 (ad-hoc)
@@ -138,7 +248,7 @@ Stable release (not pre-release) — matches ground truth. Flow: search bar → 
 **Phase**: 04 (prompt iteration)
 **Trigger**: `facebook/react` run returned pre-release `v18.3.0-next-...` instead of stable `19.2.6`; model picked topmost card on releases page.
 **Change**:
-- Rewrote `SYSTEM_PROMPT` (now in `agent/schema.py`): anchor on visible "Releases" label, scan region below/beside it, skip pre-release badges and `-next`/`-rc` tags, prefer "Latest" or newest stable semver, scroll if needed.
+- Rewrote `SYSTEM_PROMPT` (then in `agent/schema.py`, now `agent/prompts.py`): anchor on visible "Releases" label, scan region below/beside it, skip pre-release badges and `-next`/`-rc` tags, prefer "Latest" or newest stable semver, scroll if needed.
 - Clarified field mapping (`latest_release` = title, not tag).
 - Updated `ARCHITECTURE.md` system prompt sketch to match.
 
