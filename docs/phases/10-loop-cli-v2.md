@@ -12,7 +12,7 @@ Wire the extended `DoneAction` through `agent/loop.py` and `navigate.py` so succ
 
 ## Deliverables
 
-- Updated `_is_blank_done()` (or equivalent) covering v2 required fields.
+- Updated `is_incomplete_extraction()` (or equivalent) covering v2 required fields.
 - `navigate.py` serializes all v2 fields to stdout / `--output`.
 - Optional: bump default `--max-steps` from 25 → 30 to accommodate scroll-heavy extraction.
 
@@ -20,7 +20,7 @@ Wire the extended `DoneAction` through `agent/loop.py` and `navigate.py` so succ
 
 ### `agent/loop.py`
 
-- [x] Extend `_is_blank_done()` to treat these as required for success:
+- [x] Extend `is_incomplete_extraction()` to treat these as required for success:
   - v1 fields: `repository`, `latest_release`, `version`, `tag`, `author` (any all-blank → failure)
   - v2 fields: `published_at` and `release_notes` must be non-empty strings
   - `downloads`: empty array is valid **only** when the model's `reasoning` indicates no Assets section (otherwise prefer at least one asset on repos known to ship assets)
@@ -33,9 +33,9 @@ Wire the extended `DoneAction` through `agent/loop.py` and `navigate.py` so succ
 - [x] Ensure `json.dumps` handles nested list cleanly (indent=2).
 - [x] Update any inline docstrings / help text referencing "five fields".
 
-### `agent/vision.py` re-exports
+### Imports
 
-- [x] Confirm `DoneAction` / `DownloadAsset` are exported if CLI or tests import them.
+- [x] CLI and loop import `DoneAction` / action types from `agent/schema.py`; factory from `agent/vision.py`.
 
 ## Output JSON shape
 

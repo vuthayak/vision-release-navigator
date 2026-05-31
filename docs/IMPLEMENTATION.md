@@ -7,7 +7,7 @@ Master status tracker for the vision-driven GitHub release CLI. This file is the
 | Milestone | Scope | Status |
 |---|---|---|
 | **v1** | Five-field release snapshot via vision navigation | **Done** (2026-05-30) |
-| **v2** | Richer metadata: release notes, download links, publish date | **In progress** |
+| **v2** | Richer metadata: release notes, download links, publish date | **Done** (2026-05-30) |
 
 ---
 
@@ -15,7 +15,7 @@ Master status tracker for the vision-driven GitHub release CLI. This file is the
 
 - **Goal**: Navigate from a starting URL to a GitHub repo's releases page using vision + Playwright — **no CSS/XPath selectors** — and return the latest **stable** release as JSON.
 - **Output** (five fields): `repository`, `latest_release`, `version`, `tag`, `author`.
-- **Verified**: `facebook/react` → `19.2.6`, 9 steps, Ollama Cloud `qwen3-vl:235b-cloud`.
+- **Verified**: `facebook/react` → `19.2.6`, 9 steps, all v2 fields, Ollama Cloud `qwen3-vl:235b-cloud` (see iteration log).
 
 ---
 
@@ -70,14 +70,14 @@ Unchanged from v1:
 | 06 | Documentation | [phases/06-docs.md](phases/06-docs.md) | Done | |
 | 07 | Smoke test & iteration | [phases/07-smoke-test.md](phases/07-smoke-test.md) | Cancelled | Ad-hoc runs only |
 
-### v2 (active)
+### v2 (complete)
 
 | # | Phase | File | Status | Notes |
 |---|---|---|---|---|
 | 08 | Extended output schema | [phases/08-extended-schema.md](phases/08-extended-schema.md) | Done | `DoneAction`, JSON schema, types |
 | 09 | Prompt & extraction heuristics | [phases/09-rich-extraction-prompt.md](phases/09-rich-extraction-prompt.md) | Done | `SYSTEM_PROMPT`, scroll guidance, anti-hallucination |
 | 10 | Loop & CLI output | [phases/10-loop-cli-v2.md](phases/10-loop-cli-v2.md) | Done | blank-done check, stdout JSON |
-| 11 | Validation & docs | [phases/11-v2-validation-docs.md](phases/11-v2-validation-docs.md) | Not started | E2E run, README, ARCHITECTURE sync |
+| 11 | Validation & docs | [phases/11-v2-validation-docs.md](phases/11-v2-validation-docs.md) | Done | E2E v2 on `facebook/react`; post-ship hardening in iteration log |
 
 **Status legend**: `Not started` → `In progress` → `Blocked` → `Done`.
 
@@ -85,9 +85,16 @@ Unchanged from v1:
 
 > Update this section at the start of every working session.
 
-- **Active milestone**: v2 — richer release metadata.
-- **Active phase**: 11 — Validation & docs (phase 10 loop/CLI wiring complete).
+- **Active milestone**: None — v1 and v2 complete.
+- **Active phase**: None.
 - **Blockers**: None.
+
+## Post-ship defaults (2026-05-30)
+
+- **`time_budget_s`**: 420s in `agent/loop.py` (was 180s).
+- **`max_steps`**: 30 (CLI + loop).
+- **Ollama**: `num_predict: 1024`; truncated action JSON salvage in `action_parse.py` (`parse_action_lenient()`).
+- **Prompt**: gentle scroll-within-release heuristics to avoid selecting older stable releases.
 
 ## Definition of done
 
@@ -104,9 +111,9 @@ Unchanged from v1:
 - [x] `SYSTEM_PROMPT` instructs the model to scroll for truncated notes and Assets before emitting `done`.
 - [x] Agent loop treats blank v2 fields as incomplete (same pattern as v1 five-field check).
 - [x] `navigate.py` prints the extended JSON shape on stdout (and `--output`).
-- [ ] End-to-end verification on `facebook/react`: stable release with non-empty `published_at`, substantive `release_notes`, and at least one entry in `downloads`.
-- [ ] README and `ARCHITECTURE.md` document the v2 output contract and updated limitations.
-- [ ] No CSS/XPath selectors introduced in `agent/`.
+- [x] End-to-end verification on `facebook/react`: all v2 fields populated; latest stable **19.2.6** in 9 steps with `--headed --debug` (2026-05-30).
+- [x] README and `ARCHITECTURE.md` document the v2 output contract and updated limitations.
+- [x] No CSS/XPath selectors introduced in `agent/` (`rg` clean).
 
 ## How to use these docs
 

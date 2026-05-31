@@ -1,29 +1,16 @@
-"""Vision client factory and public exports."""
+"""Vision client factory and protocol."""
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
+from agent.defaults import DEFAULT_GEMINI_MODEL, DEFAULT_OLLAMA_HOST, DEFAULT_OLLAMA_MODEL
+from agent.errors import VisionClientError
 from agent.gemini_client import GeminiVisionClient
-from agent.ollama_client import OllamaConnectionError, OllamaVisionClient, ollama_requires_api_key
-from agent.schema import (
-    Action,
-    ClickAction,
-    DoneAction,
-    DownloadAsset,
-    PressKeyAction,
-    ScrollAction,
-    SYSTEM_PROMPT,
-    TypeAction,
-    WaitAction,
-)
-
-DEFAULT_OLLAMA_MODEL = "qwen2.5vl:3b"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
-DEFAULT_OLLAMA_HOST = "https://ollama.com"
+from agent.ollama_client import OllamaVisionClient, ollama_requires_api_key
+from agent.schema import Action
 
 
-@runtime_checkable
 class VisionClient(Protocol):
     def decide_next_action(
         self,
@@ -47,6 +34,11 @@ def create_vision_client(
 ) -> VisionClient:
     normalized = provider.strip().lower()
     if normalized == "ollama":
+        if ollama_requires_api_key(ollama_host) and not ollama_api_key:
+            raise ValueError(
+                "OLLAMA_API_KEY is required for Ollama Cloud. "
+                "Create a key at https://ollama.com/settings/keys"
+            )
         return OllamaVisionClient(
             model=model or DEFAULT_OLLAMA_MODEL,
             host=ollama_host,
@@ -59,26 +51,9 @@ def create_vision_client(
             api_key=api_key,
             model=model or DEFAULT_GEMINI_MODEL,
         )
-    raise ValueError(f"Unknown vision provider: {provider!r} (expected ollama or gemini)")
+    raise ValueError(
+        f"Unknown vision provider: {normalized!r} (expected ollama or gemini)"
+    )
 
 
-__all__ = [
-    "Action",
-    "ClickAction",
-    "DEFAULT_GEMINI_MODEL",
-    "DEFAULT_OLLAMA_HOST",
-    "DEFAULT_OLLAMA_MODEL",
-    "DoneAction",
-    "DownloadAsset",
-    "GeminiVisionClient",
-    "OllamaConnectionError",
-    "OllamaVisionClient",
-    "PressKeyAction",
-    "ScrollAction",
-    "SYSTEM_PROMPT",
-    "TypeAction",
-    "VisionClient",
-    "WaitAction",
-    "create_vision_client",
-    "ollama_requires_api_key",
-]
+__all__ = ["VisionClient", "VisionClientError", "create_vision_client"]
