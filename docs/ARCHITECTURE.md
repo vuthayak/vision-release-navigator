@@ -53,15 +53,19 @@ After every action that can mutate the DOM, call `page.wait_for_load_state("netw
 
 ### `agent/schema.py`
 - Pydantic **Action** union, JSON schema, and `validate_action()`.
-- `DoneAction.is_incomplete_extraction()` — rejects partial v1/v2 fields; empty `downloads` allowed only when reasoning claims no Assets section.
+- `DoneAction.is_incomplete_extraction()` — rejects blank required string fields only.
+
+### `agent/github_release.py`
+- Single source for GitHub release policy: URL classification (`list` / `detail`), `done_rejection_reason()` (requires `press_key End` on detail before empty `downloads`), scroll nudges, no-assets reasoning markers, and prompt fragments imported by `prompts.py`.
 
 ### `agent/prompts.py`
-- `SYSTEM_PROMPT` — role, coordinate convention, action schema reminder, GitHub release extraction heuristics, and stop conditions.
+- `SYSTEM_PROMPT` — role, coordinate convention, action schema reminder, GitHub release extraction heuristics (workflow/stop fragments from `github_release.py`), and stop conditions.
 
 ### `agent/action_parse.py`
 - `build_user_text()` — assembles per-turn user message (goal, URL, prior actions).
 - `parse_action()` — strict JSON parse for structured-output providers (e.g. Gemini).
-- `parse_action_lenient()` — repair/salvage path for truncated or malformed JSON (fences, trailing commas, truncated tail, click/wait salvage, `ast.literal_eval` fallback).
+- `parse_action_lenient()` — repair/salvage path for truncated or malformed JSON (fences, trailing commas, bare keys via `_quote_bare_keys`, truncated tail, click/wait salvage, `ast.literal_eval` fallback).
+- `_quote_bare_keys()` — quotes bare identifier keys (`x:620`) outside string literals so `json.loads` can parse Ollama output.
 - `_normalize_action_payload()` — fills missing `reasoning`, default scroll direction, and array click coords before Pydantic validation.
 - `action_retry_message()` — builds the user nudge sent on the second model call after a parse/validation failure.
 
@@ -110,6 +114,18 @@ Recommended Ollama models: `qwen2.5vl:3b` (local, ~8GB VRAM), `qwen3-vl:4b` (loc
 - Keeps a rolling history of the last N actions (default 6) — enough for the model to know what it tried, bounded enough to keep tokens reasonable.
 - Terminates on `Action.done`, on `max_steps`, or on wall-clock cap (`--time-budget`, default 420 s).
 - When `--debug`, writes `screenshots/step_NN.png` and `screenshots/step_NN.json` (the model's raw decision).
+- Inline comments (v3) document stale-loop detection, history cap, and incomplete-`done` rejection.
+
+### v3: lenient JSON parse pipeline (Ollama)
+
+Ollama uses `parse_action_lenient()` — a progressive repair chain before Pydantic validation:
+
+1. Strip markdown fences; extract first `{...}` object.
+2. Try `json.loads` on: raw text → trailing-comma repair → `_quote_bare_keys()` → truncated-tail repair.
+3. Fall back to regex salvage for cut-off navigation actions, then `ast.literal_eval` for Python dict syntax.
+4. `_normalize_action_payload()` fills missing `reasoning`, default scroll direction, and `[x,y]` array coords.
+
+Gemini skips this chain and uses strict `parse_action()` because structured output is reliable.
 
 ## Action schema
 
@@ -177,6 +193,11 @@ flowchart LR
 | Model omits `reasoning` field | Pydantic validation error | Normalized to `""` before validation |
 | Truncated action JSON | Response cut off before `"reasoning"` (common on Ollama Cloud) | `_repair_truncated_tail()` / `_salvage_truncated_action()`; `num_predict: 1024` |
 | Ollama array coords / missing scroll direction | Pydantic validation error | `_normalize_action_payload()` splits `[x,y]` arrays and defaults scroll direction to `down`; retry if still invalid |
+| Ollama unquoted JSON keys | `JSONDecodeError` (`x:620`) | `_quote_bare_keys()` in lenient parse path before `json.loads` |
+| Ollama malformed click coords | `JSONDecodeError` (`"x":40, 149` or `y":278"`) | `_repair_click_coords()` inserts missing `"y"` key / quotes |
+| Model emits `press_key` Back | Playwright `Unknown key: "Back"` | `browser.press_key()` maps Back/Forward to `page.go_back()` / `go_forward()` |
+| Wrong sidebar click (Sponsors) | Agent leaves releases flow | Prompt: click only **Releases** row; return via repo name link, not Back |
+| Ollama Cloud session limit (429) | HTTP 429 from Ollama Cloud | Wait for quota reset; use local Ollama; partial runs may leave debug artifacts in `screenshots/` |
 | Gemini rate limit (429) | API error | Use `--provider ollama` or wait and retry |
 | Click misses target | URL didn't change / page identical after N steps | Loop detects no-progress and asks model to scroll or reconsider |
 | Ollama Cloud auth missing | No `OLLAMA_API_KEY` with cloud host | Set key from ollama.com/settings/keys |
@@ -196,6 +217,7 @@ flowchart LR
 |---|---|---|
 | v1 | Five-field release snapshot | Shipped |
 | v2 | + `published_at`, `release_notes`, `downloads` | Shipped (2026-05-30) — verified `facebook/react` **19.2.6**, 9 steps, all fields |
+| v3 | JSON normalization, code comments, OpenClaw sample | Done (2026-05-31); [`openclaw-release.json`](../openclaw-release.json) |
 
 ## What's deliberately *not* in scope
 
@@ -204,6 +226,6 @@ flowchart LR
 - Multi-tab / popup handling.
 - GitHub REST/GraphQL API (vision-only extraction).
 - Anything beyond the **topmost stable** release on `/releases`.
-- Direct `--repo` targeting or open-ended prompts (post–v2 backlog).
+- Direct `--repo` targeting or open-ended output schema (post–v3 backlog).
 
-Post–v2 ideas live in [BACKLOG.md](BACKLOG.md).
+Post–v3 ideas live in [BACKLOG.md](BACKLOG.md).

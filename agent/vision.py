@@ -32,6 +32,7 @@ def create_vision_client(
     ollama_host: str = DEFAULT_OLLAMA_HOST,
     ollama_api_key: str | None = None,
 ) -> VisionClient:
+    """Return the vision backend matching CLI --provider (ollama or gemini)."""
     normalized = provider.strip().lower()
     if normalized == "ollama":
         if ollama_requires_api_key(ollama_host) and not ollama_api_key:
