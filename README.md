@@ -1,10 +1,10 @@
-# aesopic-f26-take-home
+# vision-release-navigator
 
 Vision-driven CLI that navigates GitHub in a real browser (Playwright) using screenshot feedback from a vision model — no CSS/XPath selectors. Given a starting URL and a natural-language goal, it returns the latest **stable** release metadata as JSON.
 
 **Milestones**: v1 (five-field snapshot) → v2 (+ notes, downloads, publish date) → v3 (JSON normalization, code comments, OpenClaw sample artifact). Progress: [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
 
-Submission for the Fall 2026 Vision Agents co-op take-home (Aesopic Inc.).
+Personal project focused on autonomous, vision-driven browser navigation for software release intelligence.
 
 ## Setup
 
@@ -234,7 +234,7 @@ python navigate.py \
   --headed --debug
 ```
 
-- **Target**: `openclaw/openclaw` (canonical take-home example since v1)
+- **Target**: `openclaw/openclaw` (long release page used for stress-testing extraction)
 - **Provider / model**: Ollama Cloud, `qwen3-vl:235b-cloud`
 - **Output**: topmost release **v2026.5.30-beta.1**, partial `release_notes`, Source code zip/tar.gz in `downloads`
 - **Code shipped**: unquoted-key JSON normalization (`_quote_bare_keys`), line-level comments, End-to-bottom for Assets on long changelogs
@@ -250,7 +250,7 @@ Vision-driven navigation with an eight-field release snapshot (v2). Not included
 - **Ollama JSON flakiness** — malformed action JSON is retried/salvaged (including unquoted keys); stderr may show `[vision:ollama] invalid JSON` even on successful runs.
 - **API rate limits** — Ollama Cloud session caps and Gemini free-tier daily limits can block long runs; retry when quota resets.
 - **Wall-clock budget** — default **420s** loop cap (Ollama Cloud inference is slow; v2 adds scroll steps for notes and Assets).
-- **Direct repo targeting** — no `--repo owner/name` (or repo URL) flag; you start from `--url` and describe the goal in `--prompt`. Navigation from `https://github.com` is sufficient for the take-home scope.
+- **Direct repo targeting** — no `--repo owner/name` (or repo URL) flag; you start from `--url` and describe the goal in `--prompt`.
 - **Open-ended output** — prompts can vary phrasing, but output is always the eight-field release snapshot; tasks like comparing releases or summarizing features as free text are post-v3 backlog.
 
 ## Troubleshooting

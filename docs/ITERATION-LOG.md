@@ -218,7 +218,7 @@ Stable release (not pre-release) — matches ground truth. Flow: search bar → 
 ## 2026-05-30 — Drop formal smoke matrix
 
 **Phase**: 07
-**Trigger**: Submission scope review — 5-repo test matrix is unnecessary for the take-home deliverable.
+**Trigger**: Scope review — 5-repo test matrix was unnecessary for the current project goals.
 **Change**:
 - Cancelled phase 07 smoke matrix and `smoke-results.md` deliverable.
 - Kept ad-hoc iteration via real `--headed --debug` runs as sufficient validation.
