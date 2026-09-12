@@ -6,7 +6,7 @@ Validate the tool end-to-end on real GitHub repositories and use the findings to
 
 ## Status
 
-- **State**: Cancelled (formal matrix out of scope for submission)
+- **State**: Cancelled (formal matrix out of scope for this iteration)
 - **Started**: 2026-05-30
 - **Completed**: 2026-05-30
 
@@ -72,4 +72,4 @@ When a smoke test fails, work through these in order:
 ## Notes
 
 - This phase is intentionally where most of the "interesting" engineering happens. Budget 1.5–2× the time you spent on phases 02–05 combined.
-- When you finish, sketch one paragraph in the README about what you learned — that's often the most compelling part of a take-home.
+- When you finish, sketch one paragraph in the README about what you learned — that often becomes the most compelling part of the project narrative.

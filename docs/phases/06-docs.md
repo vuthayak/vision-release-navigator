@@ -2,7 +2,7 @@
 
 ## Goal
 
-Replace the placeholder `README.md` with a complete, reviewer-ready document. This is a take-home, so the README is part of the deliverable, not an afterthought.
+Replace the placeholder `README.md` with a complete, contributor-ready document. The README is a first-class project artifact, not an afterthought.
 
 ## Status
 
